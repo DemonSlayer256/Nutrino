@@ -1,0 +1,194 @@
+{% extends "index.html" %}
+
+{% block title %}
+History
+{% endblock %}
+
+{% block main %}
+
+<div class="container d-flex justify-content-center my-4">
+  <div class="rounded-3 shadow p-4" style="background-color: #8ef191;" >
+    <div class="d-flex justify-content-between align-items-center mb-3">
+      <select id="year" class="form-select form-select-sm m-2" style="background-color: #CAE8BD; border: none; border-radius: 10px;"></select>
+      <select id="month" class="form-select form-select-sm m-2" style="background-color: #CAE8BD; border: none; border-radius: 10px;"></select>
+    </div>
+    <div class="d-grid" style="grid-template-columns: repeat(7, 1fr); text-align: center;">
+      <div class="fw-bold">S</div>
+      <div class="fw-bold">M</div>
+      <div class="fw-bold">T</div>
+      <div class="fw-bold">W</div>
+      <div class="fw-bold">T</div>
+      <div class="fw-bold">F</div>
+      <div class="fw-bold">S</div>
+    </div>
+    <!-- Calendar Days -->
+    <div class="d-grid" id="calendar-days" style="grid-template-columns: repeat(7, 1fr); gap: 0.5rem; margin-top: 1rem;"></div>
+  </div>
+</div>
+
+<!-- Bootstrap Modal -->
+<div class="modal fade" id="dateModal" tabindex="-1" aria-labelledby="dateModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="dateModalLabel">Food Details</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body" id="modal-body-content">
+        <div class="table-responsive">
+          <table class="table table-bordered mb-0">
+            <thead class="table-light">
+              <tr>
+                <th>Food Name</th>
+                <th>Serving</th>
+                <th>Net Carbs</th>
+                <th>Net Protein</th>
+                <th>Net Kcal</th>
+              </tr>
+            </thead>
+            <tbody>
+              <!-- Food details will be dynamically inserted here -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+<script>
+  document.addEventListener("DOMContentLoaded", function() {
+    const yearSelect = document.getElementById('year');
+    const monthSelect = document.getElementById('month');
+    const calendarDays = document.getElementById('calendar-days');
+    const dateModal = new bootstrap.Modal(document.getElementById('dateModal'));
+    const today = new Date();
+
+    // Populate year options
+    for (let y = 2025; y <= today.getFullYear() ; y++) {
+      const option = document.createElement('option');
+      option.value = y;
+      option.text = y;
+      yearSelect.add(option);
+    }
+
+    // Populate month options
+    const monthNames = [
+      'January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December'
+    ];
+
+    monthNames.forEach((m, idx) => {
+      const option = document.createElement('option');
+      option.value = idx;
+      option.text = m;
+      monthSelect.add(option);
+    });
+
+    function renderCalendar(year, month) {
+      // Clear previous days
+      calendarDays.innerHTML = '';
+
+      const firstDay = new Date(year, month, 1).getDay();
+      const totalDays = new Date(year, month + 1, 0).getDate();
+
+      // Add empty divs for days before the first day
+      for (let i = 0; i < firstDay; i++) {
+        const emptyDiv = document.createElement('div');
+        emptyDiv.className = 'p-2';
+        calendarDays.appendChild(emptyDiv);
+      }
+
+
+
+      for (let d = 1; d <= totalDays; d++) {
+        const btn = document.createElement('button');
+        btn.innerText = d;
+        btn.className = 'btn btn-outline-secondary rounded-3';
+        btn.style.width = '100%';
+
+        // Highlight today
+        if (
+          d === today.getDate() &&
+          year === today.getFullYear() &&
+          month === today.getMonth()
+        ) {
+          btn.classList.add('bg-success', 'text-white');
+        }
+
+        // Add click event to trigger modal
+        btn.addEventListener('click', () => {
+          fetchDateData(year, month, d);
+          dateModal.show();
+        });
+
+        // Append to grid
+        const wrapper = document.createElement('div');
+        wrapper.className = 'p-1';
+        wrapper.appendChild(btn);
+        calendarDays.appendChild(wrapper);
+      }
+    }
+
+    async function fetchDateData(year, month, day) {
+      const data = { year: year, month: month + 1, day: day };
+      try {
+        const response = await fetch('/history', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ date: data })
+        });
+        const result = await response.json();
+        const modalBody = document.querySelector('#modal-body-content tbody');
+        console.log('Result:', result);
+        if (typeof result === 'object' && result !== null) {
+          Object.keys(result).forEach(key => {
+            console.log(`Field: ${key}, Value:`, result[key]);
+          });
+        }
+        if (Array.isArray(result) && result.length > 0) {
+          modalBody.innerHTML = result.map(item => `
+            <tr>
+              <td class="align-middle">${item.food_name}</td>
+              <td class="align-middle">${item.serving}</td>
+              <td class="align-middle">${item.carb}</td>
+              <td class="align-middle">${item.protein}</td>
+              <td class="align-middle">${item.total_cal}</td>
+            </tr>
+          `).join('');
+        } else {
+          modalBody.innerHTML = `<tr><td colspan="5" class="text-center text-muted">No data was entered on this day</td></tr>`;
+        }
+      } catch (error) {
+        const modalBody = document.querySelector('#modal-body-content tbody');
+        modalBody.innerHTML = `<tr><td colspan="5" class="text-center text-danger">Error loading data</td></tr>`;
+        console.error('Fetch error:', error);
+      }
+    }
+
+    // Set initial date
+    const now = new Date();
+    yearSelect.value = now.getFullYear();
+    monthSelect.value = now.getMonth();
+
+    // Render initial calendar
+    renderCalendar(now.getFullYear(), now.getMonth());
+
+    // Event listeners for select change
+    yearSelect.addEventListener('change', () => {
+      renderCalendar(parseInt(yearSelect.value), parseInt(monthSelect.value));
+    });
+    monthSelect.addEventListener('change', () => {
+      renderCalendar(parseInt(yearSelect.value), parseInt(monthSelect.value));
+    });
+  });
+</script>
+
+{% endblock %}

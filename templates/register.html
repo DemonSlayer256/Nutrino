@@ -1,0 +1,87 @@
+{% extends "index.html" %}
+
+{% block title %}
+Register
+{% endblock %}
+
+{% block main %}
+<div class="d-flex justify-content-center align-items-center min-vh-100 bg-light">
+    <form action="/register" method="post" class="w-75 max-w-md p-4 bg-white bg-opacity-75 rounded shadow-lg border border-light border-2 animate__animated animate__fadeIn" style="backdrop-filter: blur(10px);">
+        <h2 class="text-center mb-4 fw-bold text-success">Register</h2>
+        <div class="mb-3">
+            <label for="username" class="form-label fs-5 mb-1">Username</label>
+            <input type="text" class="form-control form-control-lg" id="username" name="username" placeholder="Enter username" required>
+        </div>
+        <div class="mb-3">
+            <label for="email" class="form-label fs-5 mb-1">Email</label>
+            <input type="email" class="form-control form-control-lg" id="email" name="email" placeholder="Enter email" required>
+        </div>
+        <div class="mb-3">
+            <label for="weight" class="form-label fs-5 mb-1">Weight (in kg)</label>
+            <input type="number" class="form-control form-control-lg" id="weight" name="weight" placeholder="Enter weight" required>
+        </div>
+        <div class="mb-3">
+            <label for="height" class="form-label fs-5 mb-1">Height (in cm)</label>
+            <input type="number" class="form-control form-control-lg" id="height" name="height" placeholder="Enter height" required>
+        </div>
+        <div class="mb-3">
+            <label for="age" class="form-label fs-5 mb-1">Age</label>
+            <input type="number" class="form-control form-control-lg" id="age" name="age" placeholder="Enter age" required>
+        </div>
+        <!-- Password Field with Toggle -->
+        <div class="mb-3 position-relative">
+            <label for="password" class="form-label fs-5 mb-1">Create a Password</label>
+            <div class="input-group">
+                <input type="password" class="form-control form-control-lg" id="password" name="password" placeholder="Password" required>
+                <button class="btn btn-outline-secondary" type="button" id="togglePassword" aria-label="Show password">
+                    <i class="bi bi-eye-slash" id="passwordIcon"></i>
+                </button>
+            </div>
+        </div>
+        <!-- Confirm Password Field with Toggle -->
+        <div class="mb-4 position-relative">
+            <label for="conf-password" class="form-label fs-5 mb-1">Confirm your password</label>
+            <div class="input-group">
+                <input type="password" class="form-control form-control-lg" id="conf-password" name="conf-password" placeholder="Password" required>
+                <button class="btn btn-outline-secondary" type="button" id="toggleConfPassword" aria-label="Show password">
+                    <i class="bi bi-eye-slash" id="confPasswordIcon"></i>
+                </button>
+            </div>
+        </div>
+        <button type="submit" class="btn btn-success w-100 btn-lg fw-semibold shadow-hover">Register</button>
+    </form>
+</div>
+
+<!-- Bootstrap Icons CDN -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
+
+<!-- Animate.css CDN for animation -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css">
+
+<!-- Custom JS for toggle password visibility -->
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+    const togglePassword = document.getElementById("togglePassword");
+    const passwordInput = document.getElementById("password");
+    const passwordIcon = document.getElementById("passwordIcon");
+
+    togglePassword.addEventListener("click", () => {
+        const type = passwordInput.type === "password" ? "text" : "password";
+        passwordInput.type = type;
+        passwordIcon.classList.toggle("bi-eye");
+        passwordIcon.classList.toggle("bi-eye-slash");
+    });
+
+    const toggleConfPassword = document.getElementById("toggleConfPassword");
+    const confPasswordInput = document.getElementById("conf-password");
+    const confPasswordIcon = document.getElementById("confPasswordIcon");
+
+    toggleConfPassword.addEventListener("click", () => {
+        const type = confPasswordInput.type === "password" ? "text" : "password";
+        confPasswordInput.type = type;
+        confPasswordIcon.classList.toggle("bi-eye");
+        confPasswordIcon.classList.toggle("bi-eye-slash");
+    });
+});
+</script>
+{% endblock %}

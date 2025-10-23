@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>{{ title }}</title>
+  <!-- Bootstrap CSS -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.6/dist/css/bootstrap.min.css" rel="stylesheet" 
+        integrity="sha384-4Q6Gf2aSP4eDXB8Miphtr37CMZZQ5oXLH2yaXMJ2w8e2ZtHTl7GptT4jmndRuHDT" crossorigin="anonymous" />
+  <!-- Bootstrap Icons -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" />
+
+  <style>
+    body {
+      background: linear-gradient(135deg, #DDF6D2, #E0F7FA);
+    }
+    /* Main container padding */
+    main {
+      padding-top: 2rem;
+      padding-bottom: 2rem;
+    }
+  </style>
+</head>
+<body>
+
+<!-- Navbar -->
+<nav class="navbar navbar-expand-lg shadow-lg mb-4 bg-success bg-opacity-75 py-2">
+  <div class="container-fluid d-flex justify-content-between align-items-center">
+    <!-- Logo and Brand -->
+    <a class="navbar-brand d-flex align-items-center" href="/">
+      <img src="/static/logo.png" alt="Nutrino" width="35" height="30" class="me-2">
+      <span class="h4 mb-0 fw-semibold fst-italic text-white">Nutrino</span>
+    </a>
+    <!-- Toggler -->
+    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" 
+            aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+    <!-- Links -->
+    <div class="collapse navbar-collapse" id="navbarNav">
+      {% if session["user_id"] %}
+      <ul class="navbar-nav w-100 d-flex justify-content-fill gap-3 gap-md-4 mb-2 mb-lg-0">
+        <li class="nav-item flex-fill text-center">
+          <a class="nav-link h6 text-white d-inline-flex align-items-center" href="#" data-bs-toggle="modal" data-bs-target="#dashboardModal">
+            <i class="bi bi-speedometer2 display-6 me-2"></i> Dashboard
+          </a>
+        </li>
+        <li class="nav-item flex-fill text-center">
+          <a class="nav-link h6 text-white d-inline-flex align-items-center" href="#" data-bs-toggle="modal" data-bs-target="#addmeal">
+            <i class="bi bi-plus-circle display-6 me-2"></i> Add Meal
+          </a>
+        </li>
+        <li class="nav-item flex-fill text-center">
+          <a class="nav-link h6 text-white d-inline-flex align-items-center" href="/history">
+            <i class="bi bi-clock-history display-6 me-2"></i> Meal History
+          </a>
+        </li>
+        <li class="nav-item flex-fill text-center">
+          <a class="nav-link fw-bold h6 text-white d-inline-flex align-items-center" href="/login">
+            <i class="bi bi-box-arrow-in-right display-6 me-2"></i> Log {% if not session["user_id"] %}In{% else %}Out{% endif %}
+          </a>
+        </li>
+        {% if not session["user_id"] %}
+        <li class="nav-item flex-fill text-center">
+          <a class="nav-link h6 text-white d-inline-flex align-items-center" href="/register">
+            <i class="bi bi-person-plus display-6 me-2"></i> Register
+          </a>
+        </li>
+        {% endif %}
+      </ul>
+      {% endif %}
+    </div>
+  </div>
+</nav>
+
+<!-- Modals for logged-in users -->
+{% if session["user_id"] %}
+<!-- Dashboard Modal -->
+<div class="modal fade" id="dashboardModal" tabindex="-1" aria-labelledby="dashboardModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-content rounded-3 shadow-lg">
+      <div class="modal-header bg-success text-white rounded-top px-4 py-3">
+        <h5 class="modal-title" id="dashboardModalLabel">Your Dashboard</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body px-4 py-3">
+        <!-- User Data Form -->
+        <form class="mb-4" action="/apigetUserDetails" method="post" id="userDataForm">
+          <div class="mb-3">
+            <label for="username" class="form-label">Username</label>
+            <input type="text" class="form-control" id="username" name="username" disabled>
+          </div>
+          <div class="mb-3">
+            <label for="height" class="form-label">Height (cm)</label>
+            <input type="number" class="form-control" id="height" name="height" autofocus required>
+          </div>
+          <div class="mb-3">
+            <label for="weight" class="form-label">Weight (kg)</label>
+            <input type="number" class="form-control" id="weight" name="weight" required>
+          </div>
+          <button type="submit" class="btn btn-outline-success hover-scale">Update Details</button>
+        </form>
+        <!-- BMI Progress -->
+        <div>
+          <h6 class="mb-3">BMI Progress</h6>
+          <div class="progress mb-2" style="height: 30px;">
+            <div id="bmiProgressBar" class="progress-bar" role="progressbar" style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="40">0</div>
+          </div>
+          <p class="mb-1">Current BMI: <span id="currentBMI">0</span></p>
+          <p class="text-muted mb-0">Ideal BMI Range: 18.5 - 24.9</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast align-items-center text-bg-success border-0 position-fixed top-0 end-0 m-3" style="z-index: 1050; min-width: 250px;">
+  <div class="d-flex">
+    <div class="toast-body">User details updated successfully!</div>
+    <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+  </div>
+</div>
+
+<!-- Add Meal Modal -->
+<div class="modal fade" id="addmeal" tabindex="-1" aria-labelledby="mealModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content rounded-3 shadow-lg">
+      <div class="modal-header bg-info text-white rounded-top px-4 py-3">
+        <h5 class="modal-title" id="mealModalLabel">Name of the Meal</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body p-4">
+        <form action="addmeal" method="post" id="mealForm">
+          <div class="mb-3">
+            <label for="mealInput" class="form-label">Meal Name</label>
+            <input type="text" name="meal" class="form-control" id="mealInput" placeholder="Enter meal name" required>
+            <div class="list-group mt-2"></div>
+          </div>
+          <div class="mb-3">
+            <label for="serving" class="form-label">Serving Amount</label>
+            <input type="text" class="form-control" name="serving" id="serving" placeholder="Enter Serving" required>
+          </div>
+          <div class="mb-3">
+            <label for="caloriesInput" class="form-label">Calories</label>
+            <input type="text" class="form-control" id="caloriesInput" disabled>
+          </div>
+          <button type="submit" class="btn btn-outline-success hover-scale">Submit</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<!-- Flash messages -->
+{% if get_flashed_messages() %}
+<header>
+  <div class="alert alert-primary mb-0 text-center" role="alert">
+    {{ get_flashed_messages() | join(" ") }}
+  </div>
+</header>
+{% endif %}
+
+<!-- Main Content -->
+<main class="container py-5 text-center" style="max-width: 900px; margin: auto;">
+  {% block main %}{% endblock %}
+</main>
+
+<!-- Bootstrap JS Bundle -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.6/dist/js/bootstrap.bundle.min.js" crossorigin="anonymous"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    const usernameInput = document.getElementById('username');
+    const heightInput = document.getElementById('height');
+    const weightInput = document.getElementById('weight');
+    const currentBMISpan = document.getElementById('currentBMI');
+    const bmiProgressBar = document.getElementById('bmiProgressBar');
+
+    getUserData();
+
+    async function getUserData() {
+      try {
+        const response = await fetch('/apigetUserDetails');
+        const data = await response.json();
+        usernameInput.value = data[0].username;
+        heightInput.value = data[0].height;
+        weightInput.value = data[0].weight;
+        updateBMI(data[0].height, data[0].weight);
+      } catch (err) {
+        console.error('Error fetching user data:', err);
+      }
+    }
+
+    function updateBMI(heightCm, weightKg) {
+      if (!heightCm || !weightKg) return;
+      const heightM = heightCm / 100;
+      const bmi = (weightKg / (heightM * heightM)).toFixed(1);
+      currentBMISpan.textContent = bmi;
+      const maxBMI = 40;
+      const progressPercent = Math.min((bmi / maxBMI) * 100, 100);
+      bmiProgressBar.style.width = progressPercent + '%';
+      bmiProgressBar.setAttribute('aria-valuenow', bmi);
+      bmiProgressBar.textContent = bmi;
+      bmiProgressBar.classList.remove('bg-success', 'bg-info', 'bg-warning', 'bg-danger');
+      if (bmi < 18.5) {
+        bmiProgressBar.classList.add('bg-info');
+      } else if (bmi <= 24.9) {
+        bmiProgressBar.classList.add('bg-success');
+      } else if (bmi <= 29.9) {
+        bmiProgressBar.classList.add('bg-warning');
+      } else {
+        bmiProgressBar.classList.add('bg-danger');
+      }
+    }
+
+    heightInput && heightInput.addEventListener('input', () => {
+      const height = parseFloat(heightInput.value);
+      const weight = parseFloat(weightInput.value);
+      if (!isNaN(height) && !isNaN(weight)) updateBMI(height, weight);
+    });
+    weightInput && weightInput.addEventListener('input', () => {
+      const height = parseFloat(heightInput.value);
+      const weight = parseFloat(weightInput.value);
+      if (!isNaN(height) && !isNaN(weight)) updateBMI(height, weight);
+    });
+
+    document.getElementById('userDataForm') && document.getElementById('userDataForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const updatedHeight = parseFloat(heightInput.value);
+      const updatedWeight = parseFloat(weightInput.value);
+      try {
+        const res = await fetch('/apigetUserDetails', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ height: updatedHeight, weight: updatedWeight }),
+        });
+        const result = await res.json();
+        if (result.status === 'success') {
+          new bootstrap.Toast(document.querySelector('.toast')).show();
+        }
+        getUserData();
+      } catch (err) {
+        console.error('Error updating user data:', err);
+      }
+    });
+
+    const servingInput = document.getElementById('serving');
+    const caloriesInput = document.getElementById('caloriesInput');
+    let someFactor = 0;
+
+    servingInput && servingInput.addEventListener('input', () => {
+      const servingValue = parseFloat(servingInput.value);
+      if (!isNaN(servingValue)) {
+        caloriesInput.value = (someFactor * servingValue).toFixed(2);
+      }
+    });
+  });
+</script>
+</body>
+</html>
