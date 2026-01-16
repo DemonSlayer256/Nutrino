@@ -1,0 +1,4 @@
+__pycache__/
+neutrino.db
+env/
+flask_session/
