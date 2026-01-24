@@ -2,27 +2,24 @@ import firebase_admin
 import os, json
 from firebase_admin import credentials, firestore
 from flask import Flask, flash, redirect, render_template, request, session, jsonify
-from flask_session import Session
 from werkzeug.security import check_password_hash, generate_password_hash
 from helpers import apology, login_required
 from datetime import datetime as dt
-from dotenv import load_dotenv
 import google.genai as genai
 
-load_dotenv()
+firebase_creds = json.loads(os.environ["FIREBASE_CREDENTIALS"])
 
-# Initialize Firebase Admin SDK
-cred = credentials.Certificate("serviceAccountKey.json")
-firebase_admin.initialize_app(cred)
+cred = credentials.Certificate(firebase_creds)
+
+if not firebase_admin._apps:
+    firebase_admin.initialize_app(cred)
+
 db = firestore.client()
 
 # Initialize Flask App
 app = Flask(__name__)
 app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'dev-secret-key')
 app.config["SESSION_PERMANENT"] = False
-app.config["SESSION_TYPE"] = "filesystem"
-Session(app)
-
 def get_user_food_data():
     """Get all food data for current user from Firestore - TODAY ONLY."""
     try:
@@ -838,7 +835,3 @@ def save_recipe():
         import traceback
         traceback.print_exc()
         return jsonify({"error": f"Server error: {str(e)}"}), 500
-
-
-if __name__ == "__main__":
-    app.run(debug=True)
