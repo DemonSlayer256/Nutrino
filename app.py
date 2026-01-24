@@ -7,9 +7,26 @@ from helpers import apology, login_required
 from datetime import datetime as dt
 import google.genai as genai
 
-firebase_creds = json.loads(os.environ["FIREBASE_CREDENTIALS"])
+import time
 
-cred = credentials.Certificate(firebase_creds)
+# Simple in-memory cache
+food_cache = {}  # key: normalized food_name, value: (timestamp, data)
+CACHE_TTL = 300  # seconds (5 minutes)
+
+def get_cached_food(doc_id):
+    """Return cached food data if fresh, else None."""
+    entry = food_cache.get(doc_id)
+    if entry:
+        ts, data = entry
+        if time.time() - ts < CACHE_TTL:
+            return data
+    return None
+
+def set_cached_food(doc_id, data):
+    food_cache[doc_id] = (time.time(), data)
+
+client = genai.Client(api_key=os.getenv('GEMINI_API'))
+cred = credentials.Certificate("serviceAccountKey.json")
 
 if not firebase_admin._apps:
     firebase_admin.initialize_app(cred)
@@ -503,42 +520,35 @@ def addmeal():
                 flash("Invalid serving")
                 return redirect('/')
             
-            # Get food from database (check both food_data and recipes)
+            food_data = None
+            
+            # Try to find in food_data collection
             try:
-                food_docs = db.collection("food_data").where(
-                    "food_name", "==", food_name
-                ).limit(1).stream()
-                
-                food_data = None
-                for doc in food_docs:
-                    food_data = doc.to_dict()
-                    break
-                
-                # If not found in food_data, check recipes collection
-                if not food_data:
-                    recipe_docs = db.collection("recipes").where(
-                        "name", "==", food_name
-                    ).limit(1).stream()
-                    
-                    for doc in recipe_docs:
-                        recipe = doc.to_dict()
-                        # Convert recipe format to food format
+                food_docs = db.collection("food_data").where("food_name", "==", food_name).limit(1).get()
+                if food_docs:
+                    food_data = food_docs[0].to_dict()
+            except Exception as e:
+                print(f"Error fetching from food_data: {e}")
+            
+            # If not found, try recipes collection
+            if not food_data:
+                try:
+                    recipe_doc = db.collection("recipes").document(doc_id).get()
+                    if recipe_doc.exists:
+                        recipe = recipe_doc.to_dict()
                         food_data = {
                             "unit_serving_carb_g": recipe.get("carbs", 0),
                             "unit_serving_protein_g": recipe.get("protein", 0),
                             "unit_serving_energy_kcal": recipe.get("calories", 0)
                         }
-                        break
-                
-                if not food_data:
-                    flash("Food not found")
-                    return redirect('/')
-            except Exception as e:
-                print(f"Food lookup error: {e}")
-                flash("Food lookup error")
-                return redirect('/')
+                except Exception as e:
+                    print(f"Error fetching from recipes: {e}")
             
-            # Add meal to Firestore
+            # If still not found, flash error
+            if not food_data:
+                flash("Food not found")
+                return redirect('/')
+
             try:
                 today = dt.now().strftime("%Y-%m-%d")
                 db.collection("users").document(user_id).collection("meals").add({
@@ -550,110 +560,118 @@ def addmeal():
                     "date": today,
                     "added_at": dt.now().isoformat()
                 })
-                
                 flash(f"Added {food_name}")
             except Exception as e:
                 print(f"Add meal error: {e}")
                 flash("Add error")
-            
+
             return redirect('/')
         except Exception as e:
-            print(f"Add meal error: {e}")
-            flash("Add error")
+            print(f"Error in addmeal POST: {e}")
+            flash("An internal server error occurred")
             return redirect('/')
-    
-    else:  # GET request - search for food or get food data
+    else:
         try:
-            # Check if getting specific food data
             food_name = request.args.get("food", "").strip()
             if food_name:
-                try:
-                    # First check food_data collection
-                    food_docs = db.collection("food_data").where(
-                        "food_name", "==", food_name
-                    ).limit(1).stream()
-                    
-                    for doc in food_docs:
-                        food_data = doc.to_dict()
-                        return jsonify({
-                            "calories": float(food_data.get("unit_serving_energy_kcal", 0)),
-                            "carbs": float(food_data.get("unit_serving_carb_g", 0)),
-                            "protein": float(food_data.get("unit_serving_protein_g", 0))
-                        })
-                    
-                    # If not found in food_data, check recipes collection
-                    recipe_id = food_name.lower().replace(" ", "_")
-                    recipe_doc = db.collection("recipes").document(recipe_id).get()
-                    
-                    if recipe_doc.exists:
-                        recipe_data = recipe_doc.to_dict()
-                        return jsonify({
-                            "calories": float(recipe_data.get("calories", 0)),
-                            "carbs": float(recipe_data.get("carbs", 0)),
-                            "protein": float(recipe_data.get("protein", 0))
-                        })
-                    
-                    return jsonify({"error": "Food not found"}), 404
-                except Exception as e:
-                    print(f"Food data error: {e}")
-                    return jsonify({"error": "Error fetching food"}), 500
-            
-            # Otherwise search for foods
-            food_query = request.args.get("q", "").strip()
-            
+                doc_id = food_name.lower().replace(" ", "_")
+
+                # Try cache first
+                cached = get_cached_food(doc_id)
+                if cached:
+                    return jsonify(cached)
+
+                # Lookup in food_data
+                food_docs = db.collection("food_data").where("food_name", "==", food_name).limit(1).get()
+                if food_docs:
+                    food_data = food_docs[0].to_dict()
+                    response = {
+                        "calories": float(food_data.get("unit_serving_energy_kcal", 0)),
+                        "carbs": float(food_data.get("unit_serving_carb_g", 0)),
+                        "protein": float(food_data.get("unit_serving_protein_g", 0))
+                    }
+                    set_cached_food(doc_id, response)
+                    return jsonify(response)
+
+                # Lookup in recipes
+                recipe_doc = db.collection("recipes").document(doc_id).get()
+                if recipe_doc.exists:
+                    recipe_data = recipe_doc.to_dict()
+                    response = {
+                        "calories": float(recipe_data.get("calories", 0)),
+                        "carbs": float(recipe_data.get("carbs", 0)),
+                        "protein": float(recipe_data.get("protein", 0))
+                    }
+                    set_cached_food(doc_id, response)
+                    return jsonify(response)
+
+                return jsonify({"error": "Food not found"}), 404
+
+            # If 'q' param provided → autocomplete/search
+            food_query = request.args.get("q", "").strip().lower()
             if not food_query or len(food_query) < 1:
                 return jsonify([])
-            
-            # Search in Firestore with collection scan (optimized for speed)
-            foods = []
-            foods_set = set()  # Use set to track duplicates
-            try:
-                food_query_lower = food_query.lower()
-                # Limit to 100 documents for faster response
-                food_docs = db.collection("food_data").limit(100).stream()
-                
-                for doc in food_docs:
-                    food_name_doc = doc.to_dict().get("food_name", "")
-                    if food_query_lower in food_name_doc.lower() and food_name_doc not in foods_set:
-                        foods.append(food_name_doc)
-                        foods_set.add(food_name_doc)
-                        if len(foods) >= 10:
-                            break
-                
-                # Also search shared recipes collection
-                if len(foods) < 10:
-                    recipes_docs = db.collection("recipes").limit(100).stream()
-                    for doc in recipes_docs:
-                        recipe_name = doc.to_dict().get("name", "")
-                        if food_query_lower in recipe_name.lower() and recipe_name not in foods_set:
-                            foods.append(recipe_name)
-                            foods_set.add(recipe_name)
-                            if len(foods) >= 10:
-                                break
-            except Exception as e:
-                print(f"Food search error: {e}")
-            
-            return jsonify(foods)
-        except Exception as e:
-            print(f"Search error: {e}")
-            return jsonify([])
 
+            cached_search = get_cached_food(f"search_{food_query}")
+            if cached_search:
+                return jsonify(cached_search)
+
+            foods = []
+
+            # Search food_data with array-contains on search_keywords
+            food_docs = db.collection("food_data") \
+                        .where("search_keywords", "array_contains", food_query) \
+                        .limit(5).stream()
+            for doc in food_docs:
+                foods.append(doc.to_dict().get("food_name"))
+
+            # If less than 5 results, search recipes
+            if len(foods) < 5:
+                recipe_docs = db.collection("recipes") \
+                                .where("search_keywords", "array_contains", food_query) \
+                                .limit(5 - len(foods)).stream()
+                for doc in recipe_docs:
+                    foods.append(doc.to_dict().get("name"))
+
+            set_cached_food(f"search_{food_query}", foods)
+            return jsonify(foods)
+        
+        except Exception as e:
+            print(f"AddMeal GET error: {e}")
+            return jsonify({"error": "Error fetching food"}), 500
+# Simple in-memory cache
+# ---------------------------
+user_cache = {}
+CACHE_TTL = 300  # seconds (5 minutes)
+
+def get_cached_user(user_id):
+    entry = user_cache.get(user_id)
+    if entry and (time.time() - entry['time']) < CACHE_TTL:
+        return entry['data']
+    return None
+
+def set_cached_user(user_id, data):
+    user_cache[user_id] = {"data": data, "time": time.time()}
 @app.route("/make_food", methods=["GET", "POST"])
 @login_required
 def make_food():
     """Get recipe suggestion from Gemini API"""
+    user_id = session.get("user_id")
+    
     if request.method == "GET":
         try:
-            user_id = session.get("user_id")
-            user_ref = db.collection("users").document(user_id).get()
+            # Use cached user data if available
+            user_data = get_cached_user(user_id)
+            if not user_data:
+                user_ref = db.collection("users").document(user_id).get()
+                if not user_ref.exists:
+                    return redirect('/')
+                user_data = user_ref.to_dict()
+                set_cached_user(user_id, user_data)
             
-            if not user_ref.exists:
-                return redirect('/')
-            
-            user_data = user_ref.to_dict()
             recommended_calories = user_data.get("rec_cal", 2500)
             
-            # Get today's consumed calories
+            # Get today's consumed calories (avoid multiple reads)
             user_data_obj, food_entries = get_user_food_data()
             total_calories, _, _ = calculate_totals(food_entries)
             remaining_calories = recommended_calories - total_calories
@@ -708,22 +726,14 @@ Format:
 1. [step 1]
 2. [step 2]
 **Nutrition:** Calories: [X], Protein: [Xg], Carbs: [Xg]. 
-The recipe name should be a general and intuitive one which other people should be able to guess. It should be at most 3 words
+The recipe name should be a general and intuitive one which other people should be able to guess. 
+It should be at most 3 words. Do not add any emoji of sorts.
 """
-            
-            # Call Gemini API
-            api_key = os.getenv('GEMINI_API')
-            if not api_key:
-                flash("API not configured")
-                return redirect('/make_food')
-            
             try:
-                client = genai.Client(api_key=api_key)
                 response = client.models.generate_content(
                     model="gemini-2.5-flash",
                     contents=prompt
                 )
-                
                 recipe_text = response.text
             except Exception as api_error:
                 print(f"Gemini API error: {api_error}")
@@ -750,88 +760,92 @@ The recipe name should be a general and intuitive one which other people should 
             print(f"Make food POST error: {e}")
             flash("Recipe error")
             return redirect('/make_food')
-
+        
+shared_recipe_cache = {}
 
 @app.route("/save_recipe", methods=["POST"])
 @login_required
 def save_recipe():
-    """Save recipe as a meal to Firestore and update user nutrition."""
+    """Save recipe as a meal to Firestore and update user nutrition with simple dict cache."""
     try:
         user_id = session.get("user_id")
         data = request.get_json()
-        
-        print(f"DEBUG: Received data: {data}")
-        
         recipe_data = data.get("recipe_data") if data else None
         meal_time = data.get("meal_time", "meal") if data else "meal"
-        
-        print(f"DEBUG: Recipe data: {recipe_data}")
-        print(f"DEBUG: Meal time: {meal_time}")
-        
+
         if not recipe_data or not isinstance(recipe_data, dict):
-            print(f"ERROR: Invalid recipe data: {recipe_data}")
             return jsonify({"error": "No recipe data or invalid format"}), 400
-        
         if not recipe_data.get("name"):
-            print(f"ERROR: Recipe missing name")
             return jsonify({"error": "Recipe must have a name"}), 400
-        
+
+        # Ensure numeric values
         try:
-            # Ensure numeric values are floats
             calories = float(recipe_data.get("calories", 0))
             protein = float(recipe_data.get("protein", 0))
             carbs = float(recipe_data.get("carbs", 0))
-            
-            recipe_name = recipe_data.get("name", "Recipe")
-            recipe_id = recipe_name.lower().replace(" ", "_")
-            today = dt.now().strftime("%Y-%m-%d")
-            
-            print(f"DEBUG: Creating meal doc with: name={recipe_name}, cal={calories}, protein={protein}, carbs={carbs}")
-            
-            # Add to user's meals collection
-            meal_doc = {
-                "food_name": recipe_name,
-                "serving": 1.0,
-                "carb": carbs,
-                "protein": protein,
-                "kcal": calories,
-                "date": today,
-                "meal_type": meal_time,
-                "is_recipe": True,
-                "recipe_details": {
-                    "ingredients": recipe_data.get("ingredients", []),
-                    "steps": recipe_data.get("steps", [])
-                },
-                "created_at": dt.now().isoformat()
-            }
-            
-            print(f"DEBUG: Adding meal to user's collection: {meal_doc}")
-            meal_ref = db.collection("users").document(user_id).collection("meals").add(meal_doc)
-            print(f"DEBUG: Meal added with ID: {meal_ref}")
-            
-            # Also add to shared recipes collection for everyone to see
-            recipe_doc = {
-                "name": recipe_name,
-                "calories": calories,
-                "protein": protein,
-                "carbs": carbs,
-                "ingredients": recipe_data.get("ingredients", []),
-                "steps": recipe_data.get("steps", []),
-                "created_by": user_id,
-                "created_at": dt.now().isoformat(),
-                "times_used": firestore.Increment(1)
-            }
-            
-            print(f"DEBUG: Adding recipe to shared collection: {recipe_doc}")
-            db.collection("recipes").document(recipe_id).set(recipe_doc, merge=True)
-            print(f"DEBUG: Recipe added to shared collection")
-            
-            return jsonify({"status": "success", "message": "Recipe saved!"})
         except ValueError as e:
-            print(f"ERROR: Value conversion error: {e}")
             return jsonify({"error": f"Invalid numeric values: {str(e)}"}), 400
+
+        recipe_name = recipe_data.get("name").strip()
+        recipe_id = recipe_name.lower().replace(" ", "_")
+        today = dt.now().strftime("%Y-%m-%d")
+
+        # ------------------------
+        # Add meal to user's collection
+        # ------------------------
+        meal_doc = {
+            "food_name": recipe_name,
+            "serving": 1.0,
+            "carb": carbs,
+            "protein": protein,
+            "kcal": calories,
+            "date": today,
+            "meal_type": meal_time,
+            "is_recipe": True,
+            "recipe_details": {
+                "ingredients": recipe_data.get("ingredients", []),
+                "steps": recipe_data.get("steps", [])
+            },
+            "created_at": dt.now().isoformat()
+        }
+        db.collection("users").document(user_id).collection("meals").add(meal_doc)
+
+        # ------------------------
+        # Add to shared recipes collection using simple cache
+        # ------------------------
+        recipe_ref = db.collection("recipes").document(recipe_id)
+
+        if recipe_id in shared_recipe_cache:
+            # Recipe already cached, just increment times_used
+            recipe_ref.update({
+                "times_used": firestore.Increment(1)
+            })
+        else:
+            recipe_doc = recipe_ref.get()
+            if recipe_doc.exists:
+                recipe_ref.update({
+                    "times_used": firestore.Increment(1)
+                })
+            else:
+                # New recipe
+                new_recipe = {
+                    "name": recipe_name,
+                    "calories": calories,
+                    "protein": protein,
+                    "carbs": carbs,
+                    "ingredients": recipe_data.get("ingredients", []),
+                    "steps": recipe_data.get("steps", []),
+                    "created_by": user_id,
+                    "created_at": dt.now().isoformat(),
+                    "times_used": 1
+                }
+                recipe_ref.set(new_recipe)
+
+            # Add to in-memory cache
+            shared_recipe_cache[recipe_id] = True
+
+        return jsonify({"status": "success", "message": "Recipe saved!"})
     except Exception as e:
-        print(f"ERROR: Save recipe error: {e}")
         import traceback
         traceback.print_exc()
         return jsonify({"error": f"Server error: {str(e)}"}), 500
