@@ -1,0 +1,104 @@
+<!-- Reusable JavaScript utilities -->
+<script>
+  /**
+   * Toast notification helper
+   * @param {string} message - The message to display
+   * @param {string} type - 'success', 'error', 'info', 'warning'
+   * @param {number} duration - Duration in milliseconds (default: 3000)
+   */
+  function showToast(message, type = 'info', duration = 3000) {
+    // Create toast element
+    const toast = document.createElement('div');
+    toast.className = `alert alert-${type === 'error' ? 'danger' : type} alert-dismissible fade show`;
+    toast.setAttribute('role', 'alert');
+    toast.innerHTML = `
+      ${message}
+      <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    `;
+    
+    // Add to page
+    const alertContainer = document.getElementById('toast-container') || 
+                          (() => {
+                            const container = document.createElement('div');
+                            container.id = 'toast-container';
+                            container.style.cssText = 'position: fixed; top: 20px; right: 20px; z-index: 1050; width: 300px;';
+                            document.body.appendChild(container);
+                            return container;
+                          })();
+    
+    alertContainer.appendChild(toast);
+    
+    // Auto remove after duration
+    if (duration > 0) {
+      setTimeout(() => {
+        toast.remove();
+      }, duration);
+    }
+    
+    return toast;
+  }
+
+  /**
+   * Validate numeric input
+   * @param {string} value - The value to validate
+   * @param {number} min - Minimum value
+   * @param {number} max - Maximum value
+   * @returns {boolean}
+   */
+  function isValidNumber(value, min = 0, max = Infinity) {
+    const num = parseFloat(value);
+    return !isNaN(num) && num >= min && num <= max;
+  }
+
+  /**
+   * Format number to 2 decimal places
+   * @param {number} num - The number to format
+   * @returns {string}
+   */
+  function formatNumber(num) {
+    return parseFloat(num).toFixed(2);
+  }
+
+  /**
+   * Fetch with error handling
+   * @param {string} url - The URL to fetch
+   * @param {object} options - Fetch options
+   * @returns {Promise<object>}
+   */
+  async function fetchWithError(url, options = {}) {
+    try {
+      const response = await fetch(url, options);
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+      return await response.json();
+    } catch (error) {
+      console.error(`Fetch error (${url}):`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Calculate BMI
+   * @param {number} heightCm - Height in cm
+   * @param {number} weightKg - Weight in kg
+   * @returns {number} BMI value
+   */
+  function calculateBMI(heightCm, weightKg) {
+    if (!heightCm || !weightKg) return null;
+    const heightM = heightCm / 100;
+    return parseFloat((weightKg / (heightM * heightM)).toFixed(1));
+  }
+
+  /**
+   * Get BMI category
+   * @param {number} bmi - BMI value
+   * @returns {object} { category, color }
+   */
+  function getBMICategory(bmi) {
+    if (bmi < 18.5) return { category: 'Underweight', color: 'info' };
+    if (bmi <= 24.9) return { category: 'Normal', color: 'success' };
+    if (bmi <= 29.9) return { category: 'Overweight', color: 'warning' };
+    return { category: 'Obese', color: 'danger' };
+  }
+</script>

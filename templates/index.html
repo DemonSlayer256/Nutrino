@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>{{ title }}</title>
+  <title>{% block title %}Dashboard{% endblock %} - Nutrino</title>
   <!-- Bootstrap CSS -->
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.6/dist/css/bootstrap.min.css" rel="stylesheet" 
         integrity="sha384-4Q6Gf2aSP4eDXB8Miphtr37CMZZQ5oXLH2yaXMJ2w8e2ZtHTl7GptT4jmndRuHDT" crossorigin="anonymous" />
@@ -13,6 +13,7 @@
   <style>
     body {
       background: linear-gradient(135deg, #DDF6D2, #E0F7FA);
+      min-height: 100vh;
     }
     /* Main container padding */
     main {
@@ -20,6 +21,9 @@
       padding-bottom: 2rem;
     }
   </style>
+  
+  {% include 'base_styles.html' %}
+  {% block styles %}{% endblock %}
 </head>
 <body>
 
@@ -174,6 +178,10 @@
 
 <!-- Bootstrap JS Bundle -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.6/dist/js/bootstrap.bundle.min.js" crossorigin="anonymous"></script>
+
+<!-- Reusable utilities -->
+{% include 'base_utils.html' %}
+
 <script>
   document.addEventListener('DOMContentLoaded', () => {
     const usernameInput = document.getElementById('username');
@@ -304,7 +312,11 @@
       try {
         const response = await fetch(`/addmeal?food=${encodeURIComponent(selectedFood)}`);
         const foodData = await response.json();
-        if (foodData.calories) {
+        if (foodData.error) {
+          caloriesInput.value = '';
+          foodCaloriesFactor = 0;
+          console.error('Food not found:', foodData.error);
+        } else if (foodData.calories) {
           foodCaloriesFactor = parseFloat(foodData.calories);
           const servingValue = parseFloat(servingInput.value) || 1;
           caloriesInput.value = (foodCaloriesFactor * servingValue).toFixed(2);
