@@ -167,11 +167,7 @@ Calorie
                     </tr>
                 </thead>
                 <tbody id="log-table-body">
-                    {% if food_data.status == 'error' %}
-                    <tr>
-                        <td colspan="6" class="text-center text-muted">There is no data to be displayed</td>
-                    </tr>
-                    {% else %}
+                    {% if food_data %}
                     {% for item in food_data %}
                     <tr data-index="{{ loop.index0 }}">
                         <td class="food_name fw-medium">{{ item.food_name }}</td>
@@ -191,10 +187,14 @@ Calorie
                         </td>
 
                         <!-- Hidden inputs -->
-                        <input type="hidden" class="fid" value="{{ item.fid }}">
+                        <input type="hidden" class="meal_id" value="{{ item.meal_id }}">
                         <input type="hidden" class="delitem" value="false">
                     </tr>
                     {% endfor %}
+                    {% else %}
+                    <tr>
+                        <td colspan="6" class="text-center text-muted">No meals yet</td>
+                    </tr>
                     {% endif %}
                 </tbody>
             </table>
@@ -231,7 +231,7 @@ document.getElementById('logForm').addEventListener('submit', function(e) {
   // Collect data from each row
   const rows = document.querySelectorAll('#log-table-body tr');
   const data = Array.from(rows).map(row => ({
-    fid: row.querySelector('.fid').value,
+    meal_id: row.querySelector('.meal_id').value,
     serving: row.querySelector('.servings').innerText.trim(),
     delitem: row.querySelector('.delitem').value
   }));

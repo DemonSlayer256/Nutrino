@@ -51,6 +51,11 @@
           </a>
         </li>
         <li class="nav-item flex-fill text-center">
+          <a class="nav-link h6 text-white d-inline-flex align-items-center" href="/make_food">
+            <i class="bi bi-fire display-6 me-2"></i> Get Recipe
+          </a>
+        </li>
+        <li class="nav-item flex-fill text-center">
           <a class="nav-link h6 text-white d-inline-flex align-items-center" href="/history">
             <i class="bi bi-clock-history display-6 me-2"></i> Meal History
           </a>
@@ -85,7 +90,7 @@
       </div>
       <div class="modal-body px-4 py-3">
         <!-- User Data Form -->
-        <form class="mb-4" action="/apigetUserDetails" method="post" id="userDataForm">
+        <form class="mb-4" action="/api/getUserDetails" method="post" id="userDataForm">
           <div class="mb-3">
             <label for="username" class="form-label">Username</label>
             <input type="text" class="form-control" id="username" name="username" disabled>
@@ -181,12 +186,12 @@
 
     async function getUserData() {
       try {
-        const response = await fetch('/apigetUserDetails');
+        const response = await fetch('/api/getUserDetails');
         const data = await response.json();
-        usernameInput.value = data[0].username;
-        heightInput.value = data[0].height;
-        weightInput.value = data[0].weight;
-        updateBMI(data[0].height, data[0].weight);
+        usernameInput.value = data.username;
+        heightInput.value = data.height;
+        weightInput.value = data.weight;
+        updateBMI(data.height, data.weight);
       } catch (err) {
         console.error('Error fetching user data:', err);
       }
@@ -230,7 +235,7 @@
       const updatedHeight = parseFloat(heightInput.value);
       const updatedWeight = parseFloat(weightInput.value);
       try {
-        const res = await fetch('/apigetUserDetails', {
+        const res = await fetch('/api/getUserDetails', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ height: updatedHeight, weight: updatedWeight }),
@@ -245,14 +250,74 @@
       }
     });
 
+    // Food search functionality
+    const mealInput = document.getElementById('mealInput');
+    const listGroup = document.querySelector('.list-group');
     const servingInput = document.getElementById('serving');
     const caloriesInput = document.getElementById('caloriesInput');
-    let someFactor = 0;
+    let selectedFood = null;
+    let foodCaloriesFactor = 0;
+
+    mealInput && mealInput.addEventListener('input', async (e) => {
+      const query = e.target.value.trim();
+      listGroup.innerHTML = '';
+      
+      if (query.length < 2) return;
+      
+      try {
+        const response = await fetch(`/addmeal?q=${encodeURIComponent(query)}`);
+        const foods = await response.json();
+        
+        if (Array.isArray(foods) && foods.length > 0) {
+          // Deduplicate results on client side
+          const seen = new Set();
+          const uniqueFoods = foods.filter(food => {
+            if (seen.has(food.toLowerCase())) {
+              return false;
+            }
+            seen.add(food.toLowerCase());
+            return true;
+          });
+          
+          uniqueFoods.slice(0, 10).forEach(food => {
+            const item = document.createElement('button');
+            item.type = 'button';
+            item.className = 'list-group-item list-group-item-action';
+            item.textContent = food;
+            item.addEventListener('click', (e) => {
+              e.preventDefault();
+              mealInput.value = food;
+              selectedFood = food;
+              listGroup.innerHTML = '';
+              updateCalories();
+            });
+            listGroup.appendChild(item);
+          });
+        }
+      } catch (err) {
+        console.error('Error fetching foods:', err);
+      }
+    });
+
+    async function updateCalories() {
+      if (!selectedFood) return;
+      try {
+        const response = await fetch(`/addmeal?food=${encodeURIComponent(selectedFood)}`);
+        const foodData = await response.json();
+        if (foodData.calories) {
+          foodCaloriesFactor = parseFloat(foodData.calories);
+          const servingValue = parseFloat(servingInput.value) || 1;
+          caloriesInput.value = (foodCaloriesFactor * servingValue).toFixed(2);
+        }
+      } catch (err) {
+        console.error('Error fetching food data:', err);
+      }
+    }
 
     servingInput && servingInput.addEventListener('input', () => {
       const servingValue = parseFloat(servingInput.value);
-      if (!isNaN(servingValue)) {
-        caloriesInput.value = (someFactor * servingValue).toFixed(2);
+      if (!isNaN(servingValue) && foodCaloriesFactor > 0) {
+        caloriesInput.value = (foodCaloriesFactor * servingValue).toFixed(2);
       }
     });
   });
